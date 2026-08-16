@@ -1,0 +1,13 @@
+---
+source: src/regression_tests/format.rs
+description: "{\n  installPhase = ''\n        runHook preInstall\n\n        echo before\n    pasted-at-the-wrong-indent\n        echo after\n  '';\n}"
+---
+{
+  installPhase = ''
+    runHook preInstall
+
+    echo before
+    pasted-at-the-wrong-indent
+    echo after
+  '';
+}

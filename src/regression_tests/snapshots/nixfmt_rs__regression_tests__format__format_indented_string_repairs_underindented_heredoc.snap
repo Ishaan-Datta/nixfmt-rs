@@ -1,0 +1,16 @@
+---
+source: src/regression_tests/format.rs
+description: "{\n  installPhase = ''\n        runHook preInstall\n\n        cat > \"$out/bin/foo\" <<EOF\n    #!/bin/sh\n    echo hello\n    EOF\n\n        chmod +x \"$out/bin/foo\"\n  '';\n}"
+---
+{
+  installPhase = ''
+    runHook preInstall
+
+    cat > "$out/bin/foo" <<EOF
+    #!/bin/sh
+    echo hello
+    EOF
+
+    chmod +x "$out/bin/foo"
+  '';
+}

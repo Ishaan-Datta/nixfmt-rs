@@ -421,6 +421,7 @@ fn classify_indented_string(ann: Annotated<Vec<Vec<StringPart>>>) -> Term {
 fn process_indented(lines: Vec<Vec<StringPart>>) -> Vec<Vec<StringPart>> {
     let lines = remove_empty_first_line(lines);
     let lines = remove_empty_last_line(lines);
+    let lines = repair_underindented_lines(lines);
     let lines = strip_common_indentation(lines);
     lines
         .into_iter()
@@ -494,6 +495,73 @@ fn is_only_spaces(text: &str) -> bool {
 /// Check if a line is effectively empty (no parts or only spaces)
 fn is_empty_line(line: &[StringPart]) -> bool {
     line.is_empty() || matches!(line, [StringPart::TextPart(text)] if is_only_spaces(text))
+}
+
+/// Return the number of leading spaces on a non-empty line.
+///
+/// Nix indented strings only consider ASCII spaces for indentation stripping;
+/// tabs are string content.
+fn line_indentation(line: &[StringPart]) -> Option<usize> {
+    if is_empty_line(line) {
+        return None;
+    }
+
+    match line.first() {
+        Some(StringPart::TextPart(text)) => Some(text.bytes().take_while(|&b| b == b' ').count()),
+        Some(StringPart::Interpolation(_)) => Some(0),
+        None => None,
+    }
+}
+
+/// Repair accidentally under-indented lines in an indented string.
+///
+/// The first indented non-empty line establishes the intended base indentation.
+/// Any later non-empty line with less indentation is padded back to that base.
+///
+/// This prevents one accidentally pasted low-indent line from reducing Nix's
+/// common indentation and causing every correctly indented line to become
+/// literal leading whitespace in the resulting string.
+fn repair_underindented_lines(mut lines: Vec<Vec<StringPart>>) -> Vec<Vec<StringPart>> {
+    let Some((base_index, base_indent)) = lines
+        .iter()
+        .enumerate()
+        .filter_map(|(index, line)| line_indentation(line).map(|indent| (index, indent)))
+        .find(|(_, indent)| *indent > 0)
+    else {
+        return lines;
+    };
+
+    for line in lines.iter_mut().skip(base_index + 1) {
+        let Some(indent) = line_indentation(line) else {
+            continue;
+        };
+
+        if indent >= base_indent {
+            continue;
+        }
+
+        let missing = base_indent - indent;
+        let padding = " ".repeat(missing);
+
+        match line.first_mut() {
+            Some(StringPart::TextPart(text)) => {
+                let mut repaired = String::with_capacity(padding.len() + text.len());
+
+                repaired.push_str(&padding);
+                repaired.push_str(text);
+
+                *text = repaired.into_boxed_str();
+            }
+
+            Some(StringPart::Interpolation(_)) => {
+                line.insert(0, StringPart::TextPart(padding.into_boxed_str()));
+            }
+
+            None => {}
+        }
+    }
+
+    lines
 }
 
 /// Remove the first line if it's empty or contains only spaces

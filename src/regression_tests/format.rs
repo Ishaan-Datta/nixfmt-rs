@@ -411,3 +411,38 @@ fn format_operator_trailing_comment_hoisted() {
 fn format_language_annotation_with_trail_comment() {
     test_format!("/*c*/''''#}\nA");
 }
+
+/// An accidentally under-indented line in an indented string must not reduce
+/// the indentation baseline for the entire string.
+#[test]
+fn format_indented_string_repairs_underindent() {
+    test_format!(
+        r#"{
+  installPhase = ''
+        runHook preInstall
+
+        echo before
+    pasted-at-the-wrong-indent
+        echo after
+  '';
+}"#
+    );
+}
+
+#[test]
+fn format_indented_string_repairs_underindented_heredoc() {
+    test_format!(
+        r#"{
+  installPhase = ''
+        runHook preInstall
+
+        cat > "$out/bin/foo" <<EOF
+    #!/bin/sh
+    echo hello
+    EOF
+
+        chmod +x "$out/bin/foo"
+  '';
+}"#
+    );
+}
